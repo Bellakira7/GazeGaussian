@@ -134,7 +134,6 @@ class CameraModule():
             bg_color = torch.zeros(self.feature_nc, resolution, resolution, device=xyz.device)
         else:
             raise ValueError("bg_type must be either 'white' or 'black'")
-
         world_view_transform = data['world_view_transform']
         full_proj_transform = data['full_proj_transform']
         camera_center = data['camera_center']

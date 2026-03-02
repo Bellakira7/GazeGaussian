@@ -290,7 +290,8 @@ class GaussianModel(nn.Module):
 
         gaussians = {}
         gaussians['xyz'] = xyz
-        gaussians['color'] = color
+        rgb_color = torch.sigmoid(color)
+        gaussians['color'] = rgb_color
         gaussians['scales'] = scales
         gaussians['rotation'] = rotation
         gaussians['opacity'] = opacity

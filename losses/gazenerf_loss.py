@@ -84,6 +84,65 @@ def _ssim(img1, img2, window, window_size, channel, size_average=True):
     else:
         return ssim_map.mean(1).mean(1).mean(1)
 
+def compute_relative_depth_loss(depth_eye, depth_face, eye_mask, margin=0.005):
+    """
+    计算相对深度惩罚损失 (Relative Depth Penalty)
+    
+    目的: 惩罚超出眼睑范围的眼球点（即眼球凸出）。
+    在深度图中，距离相机越近，深度值通常越小。
+    因此，如果 depth_eye < depth_face，意味着眼球比皮肤更靠近镜头，产生了穿模。
+    
+    参数:
+        depth_eye: [B, 1, H, W] 渲染的眼部深度图
+        depth_face: [B, 1, H, W] 渲染的面部深度图
+        eye_mask: [B, 1, H, W] 眼部区域的二值掩码 (1表示眼睛, 0表示其他)
+        margin: 容差，允许极其微小的凸起，防止过度惩罚导致眼球内陷凹陷。
+    """
+    # 计算深度差，正值表示眼球比面部更靠近镜头（凸出）
+    depth_diff = depth_face - depth_eye 
+    
+    # 引入 margin 进行截断，只有明显超出的部分才被惩罚
+    violation = torch.relu(depth_diff - margin)
+    
+    # 将惩罚严格限制在眼部区域内
+    masked_violation = violation * eye_mask
+    
+    # 计算平均 loss (避免除以 0)
+    loss_depth = masked_violation.sum() / (eye_mask.sum() + 1e-6)
+    
+    return loss_depth
+
+def compute_normal_smoothness_loss(depth_map, mask):
+    """
+    计算局部法线平滑损失 (Local Normal Smoothness)
+    
+    目的: 通过深度图的一阶空间梯度（近似法线或表面倾斜度）来约束局部的几何平滑，
+          防止不使用 2D 渲染器后出现的噪点和几何碎块。
+          
+    参数:
+        depth_map: [B, 1, H, W] 渲染的深度图（面部或眼部均可）
+        mask: [B, 1, H, W] 关注的区域掩码
+    """
+    # 提取在 X 和 Y 方向的梯度 (相邻像素的深度差)
+    # 使用切片计算，比卷积更快
+    dy = depth_map[:, :, 1:, :] - depth_map[:, :, :-1, :]
+    dx = depth_map[:, :, :, 1:] - depth_map[:, :, :, :-1]
+    
+    # 对齐尺寸 (由于切片导致尺寸少1，通过 padding 补齐)
+    dy = F.pad(dy, (0, 0, 0, 1)) 
+    dx = F.pad(dx, (0, 1, 0, 0)) 
+    
+    # 计算梯度的绝对值作为粗略的表面粗糙度度量
+    smoothness = torch.abs(dx) + torch.abs(dy)
+    
+    # 仅在关心的区域内惩罚不平滑
+    masked_smoothness = smoothness * mask
+    
+    # 计算平均 loss
+    loss_smooth = masked_smoothness.sum() / (mask.sum() + 1e-6)
+    
+    return loss_smooth
+
 class VGGPerceptualLoss(torch.nn.Module):
     def __init__(self, resize=True):
         """
@@ -251,6 +310,9 @@ class GazeNeRFLoss(object):
         vgg_loss_begin=2,
         angular_loss_begin=2,
         device=None,
+        use_depth_geom_loss=True,      # 开启你提出的深度几何约束
+        depth_penalty_weight=10.0,     # 相对深度惩罚的权重
+        normal_smoothness_weight=0.5,  # 平滑度先验的权重
     ) -> None:
         """
         Init function for GazeNeRFLoss.
@@ -267,6 +329,9 @@ class GazeNeRFLoss(object):
         self.face_loss_importance = face_loss_importance
         self.gaze_loss_importance = gaze_loss_importance
         self.eye_region_importance = 1.0
+        self.use_depth_geom_loss = use_depth_geom_loss
+        self.depth_penalty_weight = depth_penalty_weight
+        self.normal_smoothness_weight = normal_smoothness_weight
 
         if bg_type == "white":
             self.bg_value = 1.0
@@ -478,7 +543,8 @@ class GazeNeRFLoss(object):
         face_mask = torch.logical_and(data['face_mask'] >= 0.5, torch.logical_and(data['left_eye_mask'] < 0.5, data['right_eye_mask'] < 0.5))
         eyes_mask = torch.logical_or(data['left_eye_mask'] >= 0.5, data['right_eye_mask'] >= 0.5)
         nonhead_mask = data['face_mask'] < 0.5
-
+        depth_face = data['face_render_dict']['depth_maps']
+        depth_eyes = data['eyes_render_dict']['depth_maps']
         loss_dict = self.calc_data_loss(
             data['total_render_dict'],
             data['image'],

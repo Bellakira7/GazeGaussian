@@ -130,7 +130,6 @@ class NeuralRenderer(nn.Module):
         if self.n_blocks == 0:
             rgb = x[:, :3]
             return rgb
-
         rgb = self.rgb_upsample(self.feat_2_rgb_list[0](x))
         net = x
         for idx in range(self.n_blocks):
@@ -148,7 +147,6 @@ class NeuralRenderer(nn.Module):
 
         if self.final_actvn:
             rgb = torch.sigmoid(rgb)
-
         return rgb
 
 

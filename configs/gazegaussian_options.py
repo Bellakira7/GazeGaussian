@@ -21,17 +21,21 @@ class BaseOptions(object):
         self.bg_type = "white"
 
         self.featmap_size = 512 #128
-        self.featmap_nc = 32
+        self.featmap_nc = 3 #32
 
 
         self.num_add_mouth_points = 3000
-        self.shape_color_mlp = [272, 256, 256, 32]
-        self.pose_color_mlp = [182, 128, 32]
-        self.appea_color_mlp = [235, 256, 256, 32]
+        # self.shape_color_mlp = [272, 256, 256, 32]
+        # self.pose_color_mlp = [182, 128, 32]
+        # self.appea_color_mlp = [235, 256, 256, 32]
 
-        self.eye_color_mlp = [146, 128, 32]
+        # self.eye_color_mlp = [146, 128, 32]
+        self.shape_color_mlp = [272, 256, 256, 3]
+        self.pose_color_mlp = [182, 128, 3]
+        self.appea_color_mlp = [235, 256, 256, 3]
 
-        
+        self.eye_color_mlp = [146, 128, 3]
+
         self.shape_deform_mlp = [171, 256, 256, 256, 256, 256, 3]
         self.pose_deform_mlp = [81, 256, 256, 3]
         self.eye_deform_mlp = [45, 128, 128, 3]

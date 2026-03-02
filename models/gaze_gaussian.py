@@ -123,15 +123,28 @@ class GazeGaussianNet(nn.Module):
         return optimization_group
 
     def initialize_with_meshhead(self, meshhead):
-        self.fg_CD_predictor_face.shape_color_mlp.load_state_dict(meshhead.shape_color_mlp.state_dict())
-        self.fg_CD_predictor_face.pose_color_mlp.load_state_dict(meshhead.pose_color_mlp.state_dict())
+        def safe_load_state_dict(target_module, source_state_dict):
+            target_dict = target_module.state_dict()
+            # 仅仅保留那些 key 存在，且 shape 完全一致的权重 (比如 conv1)
+            # 自动丢弃我们改过维度的最后一层 (比如 conv2)
+            filtered_dict = {k: v for k, v in source_state_dict.items() 
+                             if k in target_dict and v.shape == target_dict[k].shape}
+            target_dict.update(filtered_dict)
+            target_module.load_state_dict(target_dict)
+        # self.fg_CD_predictor_face.shape_color_mlp.load_state_dict(meshhead.shape_color_mlp.state_dict())
+        # self.fg_CD_predictor_face.pose_color_mlp.load_state_dict(meshhead.pose_color_mlp.state_dict())
+        safe_load_state_dict(self.fg_CD_predictor_face.shape_color_mlp, meshhead.shape_color_mlp.state_dict())
+        safe_load_state_dict(self.fg_CD_predictor_face.pose_color_mlp, meshhead.pose_color_mlp.state_dict())
 
         self.fg_CD_predictor_face.shape_deform_mlp.load_state_dict(meshhead.shape_deform_mlp.state_dict())
         self.fg_CD_predictor_face.pose_deform_mlp.load_state_dict(meshhead.pose_deform_mlp.state_dict())
 
-        self.fg_CD_predictor_eyes.shape_color_mlp.load_state_dict(meshhead.shape_color_mlp.state_dict())
-        self.fg_CD_predictor_eyes.pose_color_mlp.load_state_dict(meshhead.pose_color_mlp.state_dict())
-        self.fg_CD_predictor_eyes.eye_color_mlp.load_state_dict(meshhead.eye_color_mlp.state_dict())
+        safe_load_state_dict(self.fg_CD_predictor_eyes.shape_color_mlp, meshhead.shape_color_mlp.state_dict())
+        safe_load_state_dict(self.fg_CD_predictor_eyes.pose_color_mlp, meshhead.pose_color_mlp.state_dict())
+        safe_load_state_dict(self.fg_CD_predictor_eyes.eye_color_mlp, meshhead.eye_color_mlp.state_dict())
+        # self.fg_CD_predictor_eyes.shape_color_mlp.load_state_dict(meshhead.shape_color_mlp.state_dict())
+        # self.fg_CD_predictor_eyes.pose_color_mlp.load_state_dict(meshhead.pose_color_mlp.state_dict())
+        # self.fg_CD_predictor_eyes.eye_color_mlp.load_state_dict(meshhead.eye_color_mlp.state_dict())
 
         self.fg_CD_predictor_eyes.shape_deform_mlp.load_state_dict(meshhead.shape_deform_mlp.state_dict())
         self.fg_CD_predictor_eyes.pose_deform_mlp.load_state_dict(meshhead.pose_deform_mlp.state_dict())
@@ -170,11 +183,9 @@ class GazeGaussianNet(nn.Module):
             data['total_render_dict']["merge_img_eyes"] = data['eyes_render_dict']['render_images'][:,:3]
             data['total_render_dict']["merge_img_eyes_pro"] = data['eyes_render_dict']['render_images_pro'][:,:3]
             data['total_render_dict']["merge_img_face_pro"] = data['face_render_dict']['render_images_pro'][:,:3]
-
         if data["down_scale"][0] != 1:
             if full_pipe:
                 data['total_render_dict']["merge_img_face"] = F.interpolate(data['total_render_dict']["merge_img_face"], scale_factor=int(data["down_scale"][0].numpy()), mode='bilinear')
                 data['total_render_dict']["merge_img_eyes"] = F.interpolate(data['total_render_dict']["merge_img_eyes"], scale_factor=int(data["down_scale"][0].numpy()), mode='bilinear')
             data['total_render_dict']["merge_img"] = F.interpolate(data['total_render_dict']["merge_img"], scale_factor=int(data["down_scale"][0].numpy()), mode='bilinear')
-        
         return data

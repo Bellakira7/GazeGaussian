@@ -148,13 +148,21 @@ class GazeGaussianTrainer():
 
 
     def train(self, train_data_loader, n_epochs, valid_data_loader=None):
-        """Run the model training"""
-        self.prepare_optimizer_opt(len(train_data_loader.dataset))
+            """Run the model training"""
+            self.prepare_optimizer_opt(len(train_data_loader.dataset))
 
-        for i in range(n_epochs):
-            self.train_epoch(train_data_loader, i)
-            if self.is_gradual_loss:
-                self.loss_utils.increase_eye_importance()
+            # ==========================================
+            # 🚀 修改点 1：在外层添加全局的 Epoch 进度条
+            # position=0 确保它固定在终端的第一行
+            # ==========================================
+            epoch_loop_bar = tqdm(range(n_epochs), desc="Total Training Progress", position=0)
+
+            for i in epoch_loop_bar:
+                # 把总 epoch 数 (n_epochs) 也传进去，方便在内层显示
+                self.train_epoch(train_data_loader, i, n_epochs) 
+                
+                if self.is_gradual_loss:
+                    self.loss_utils.increase_eye_importance()
 
 
     def prepare_data(self, data):
@@ -173,8 +181,7 @@ class GazeGaussianTrainer():
 
     def build_code_and_cam(self, iter, data, skip_opt_cam=False):
         batch_size = data['image'].shape[0]
-
-        if iter != -1:
+        if iter != -1:        
             pos_start = iter * batch_size
             pos_end = pos_start + batch_size
             expr_offset = self.expr_offset[pos_start:pos_end]
@@ -262,13 +269,18 @@ class GazeGaussianTrainer():
 
         self.get_optimizer(params_group)
 
-    def train_epoch(self, data_loader, epoch):
+    def train_epoch(self, data_loader, epoch, n_epochs=None):
         """Train for one epoch"""
 
         self.net.train()
 
-        batch_loop_bar = tqdm(data_loader, desc="Batch Progress")
-
+        # ==========================================
+        # 🚀 修改点 2：优化内层的 Batch 进度条
+        # 设置 leave=False，这样跑完一个 Epoch 后这个进度条会自动消失，不会让终端刷屏
+        # 设置 position=1，确保它显示在全局进度条的下方
+        # ==========================================
+        desc_str = f"Epoch [{epoch}/{n_epochs}]" if n_epochs else f"Epoch [{epoch}]"
+        batch_loop_bar = tqdm(data_loader, desc=desc_str, leave=False, position=1)
 
         for batch_index, data in enumerate(batch_loop_bar):
             data = self.prepare_data(data)
@@ -300,12 +312,14 @@ class GazeGaussianTrainer():
 
                 self.recorder.log(log_data)
 
-                tq_str = "Epoch: %d, Batch: %d, Loss: %.4f" % (epoch, batch_index, batch_loss_dict["total_loss"])
+                tq_str = "Loss: %.4f" % (batch_loss_dict["total_loss"])
                 for key in batch_loss_dict.keys():
                     if key == "total_loss":
                         continue
                     tq_str += ", %s: %.4f" % (key, batch_loss_dict[key])
-                batch_loop_bar.set_description_str(tq_str)
+                
+                # 更新内层进度条后缀，显示 Loss
+                batch_loop_bar.set_postfix_str(tq_str)
 
             self.optimizer.zero_grad()
             if self.opt.clip_grad:
