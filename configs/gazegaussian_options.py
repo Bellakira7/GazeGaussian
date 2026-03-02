@@ -20,7 +20,7 @@ class BaseOptions(object):
 
         self.bg_type = "white"
 
-        self.featmap_size = 128
+        self.featmap_size = 512 #128
         self.featmap_nc = 32
 
 
@@ -81,7 +81,7 @@ class BaseOptions(object):
         self.verbose = True
         self.img_dir = "./data/ETH-XGaze"
         self.dataset_name = "eth_xgaze"
-        self.down_scale = 4.0
+        self.down_scale = 1.0 #4.0
         
         self.base_expr_fix = "configs/config_files/tensor.pt"
         self.load_gazegaussian_checkpoint = ""

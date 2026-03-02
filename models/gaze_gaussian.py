@@ -161,7 +161,6 @@ class GazeGaussianNet(nn.Module):
                 data['face_render_dict']['render_images_pro'] = self.neural_render(data['face_render_dict']['render_images'], None)
                 data['eyes_render_dict']['render_images_pro'] = self.neural_render(data['eyes_render_dict']['render_images'], None)
             data['merge_render_dict']['render_images_pro'] = self.neural_render(data['merge_render_dict']['render_images'], None)
-
         data['total_render_dict'] = {
             "merge_img": data['merge_render_dict']['render_images'][:,:3],
             "merge_img_pro": data['merge_render_dict']['render_images_pro'][:,:3],

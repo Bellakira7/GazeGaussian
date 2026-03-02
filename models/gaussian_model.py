@@ -120,7 +120,7 @@ class GaussianModel(nn.Module):
         if is_eye:
             self.gaze_embedding, _ = get_embedder(opt.gaze_freq)
             self.eye_offset = nn.Parameter(torch.zeros(3))
-        
+        # self.to_rgb = nn.Linear(self.shape_color_mlp.dims[-1], 3)
         self.shape_coeffs_dim = opt.shape_coeffs_dim
         self.dist_threshold_near = opt.dist_threshold_near
         self.dist_threshold_far = opt.dist_threshold_far

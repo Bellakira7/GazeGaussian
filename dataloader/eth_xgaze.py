@@ -274,7 +274,9 @@ class GazeDataset(Dataset):
         self.file_path_list = []
         for num_i in range(0, len(self.selected_keys)):
             if self.dataset_name=='xgaze_':                
-                file_path = os.path.join(self.path, self.dataset_name + 'subject' + self.selected_keys[num_i] + '.h5')
+                # file_path = os.path.join(self.path, self.dataset_name + 'subject' + self.selected_keys[num_i] + '.h5')
+                file_path = os.path.join(self.path, self.dataset_name + self.selected_keys[num_i])
+
             else:
                 file_path = os.path.join(self.path, self.dataset_name + self.selected_keys[num_i])
             self.file_path_list.append(file_path)
