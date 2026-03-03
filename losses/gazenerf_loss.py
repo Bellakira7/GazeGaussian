@@ -543,8 +543,7 @@ class GazeNeRFLoss(object):
         face_mask = torch.logical_and(data['face_mask'] >= 0.5, torch.logical_and(data['left_eye_mask'] < 0.5, data['right_eye_mask'] < 0.5))
         eyes_mask = torch.logical_or(data['left_eye_mask'] >= 0.5, data['right_eye_mask'] >= 0.5)
         nonhead_mask = data['face_mask'] < 0.5
-        depth_face = data['face_render_dict']['depth_maps']
-        depth_eyes = data['eyes_render_dict']['depth_maps']
+
         loss_dict = self.calc_data_loss(
             data['total_render_dict'],
             data['image'],
