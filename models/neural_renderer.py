@@ -137,8 +137,8 @@ class NeuralRenderer(nn.Module):
             hid = self.feat_layers[idx](self.feat_upsample_list[idx](net))
             net = self.actvn(hid)
 
-            # if shape_code is not None:
-            #     net = self.apply_attention(net, shape_code)
+            if shape_code is not None:
+                net = self.apply_attention(net, shape_code)
 
             rgb = rgb + self.feat_2_rgb_list[idx + 1](net)
             

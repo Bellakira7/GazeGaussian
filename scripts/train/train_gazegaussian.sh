@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=$1 python train_gazegaussian.py \
+python train_gazegaussian.py \
 --batch_size 1 \
 --name 'gazegaussian' \
 --img_dir '/home/kong/dataset/ETH-XGaze/ETH-XGaze' \
@@ -6,5 +6,5 @@ CUDA_VISIBLE_DEVICES=$1 python train_gazegaussian.py \
 --num_workers 2 \
 --lr 0.0001 \
 --clip_grad \
---load_gazegaussian_checkpoint ./checkpoint/gazegaussian_ckp.pth \
-# --load_meshhead_checkpoint ./work_dirs/meshhead/checkpoints/meshhead_epoch_10.pth \
+--load_meshhead_checkpoint /home/kong/ylq/GazeGaussian/work_dirs/meshhead_2026_02_28_14_57_36/checkpoints/meshhead_epoch_9.pth
+# --load_gazegaussian_checkpoint ./checkpoint/gazegaussian_ckp.pth \
