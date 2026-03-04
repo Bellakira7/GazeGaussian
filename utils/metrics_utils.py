@@ -101,11 +101,34 @@ def variance_of_laplacian(image):
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 def calculate_FID(gt_images, pred_images):
-    first_dl, second_dl = image_get_data_loader(gt_images), image_get_data_loader(pred_images)
+    # --- 新增：定义一个内部的安全截断函数 ---
+    def make_safe(data):
+        # 如果传入的是一个列表 (List)
+        if isinstance(data, list):
+            return [
+                torch.clamp(img, min=0.0, max=1.0) if torch.is_tensor(img) else np.clip(img, 0.0, 1.0)
+                for img in data
+            ]
+        # 如果传入的是一整个拼接好的 Tensor
+        elif torch.is_tensor(data):
+            return torch.clamp(data, min=0.0, max=1.0)
+        # 如果传入的是 Numpy 数组
+        elif isinstance(data, np.ndarray):
+            return np.clip(data, 0.0, 1.0)
+        return data
+    # ----------------------------------------
+
+    # 1. 在数据进入 DataLoader 之前，强制清洗所有的浮点数误差
+    safe_gt = make_safe(gt_images)
+    safe_pred = make_safe(pred_images)
+
+    # 2. 使用安全的数据走你原来的流程
+    first_dl, second_dl = image_get_data_loader(safe_gt), image_get_data_loader(safe_pred)
     fid_metric = FID()
     first_feats = fid_metric.compute_feats(first_dl)
     second_feats = fid_metric.compute_feats(second_dl)
     fid: torch.Tensor = fid_metric(first_feats, second_feats)
+    
     return fid
 
 
@@ -136,12 +159,22 @@ def select_cam_matrix(name,cam_matrix,cam_distortion,cam_ind, subject):
     else:
         print("Dataset not supported")
 
+def to_python_type(obj):
+    if torch.is_tensor(obj):
+        return obj.item() if obj.numel() == 1 else obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: to_python_type(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [to_python_type(v) for v in obj]
+    else:
+        return obj
+
 def evaluate_input_target_images(
     device, opt, model, cam_matrix, cam_distortion, face_model_load, img_dim, method
 ):
     val_keys = {}
     for name in opt.data_names:
-        file_path = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset", name, "train_test_split.json")
+        file_path = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset", name, "train_test_split.json")
         with open(file_path, "r") as f:
             import json
             datastore = json.load(f)
@@ -338,6 +371,8 @@ def evaluate_input_target_images(
             full_images_gt_list.append(target_image_quality[0,:])
             full_images_pred_list.append(pred_image_quality[0,:])
 
+            target_image_quality = torch.clamp(target_image_quality, min=0.0, max=1.0)
+            pred_image_quality = torch.clamp(pred_image_quality, min=0.0, max=1.0)
             loss_ssim = ssim(target_image_quality, pred_image_quality, data_range=1.0).detach().cpu().numpy()
             ssim_loss += loss_ssim
             dict_ssim_loss[name] += loss_ssim
@@ -406,6 +441,7 @@ def evaluate_input_target_images(
         
         # 存到专属文件夹下
         file_path = os.path.join(out_dir, f"result_{opt.subject}.json")
+        res = to_python_type(res)
         with open(file_path, "w") as f:
             json.dump(res, f, indent=4)
 # def evaluate_input_target_images(
@@ -693,7 +729,7 @@ def evaluate_personal_calibration(
     cam_translation,
     cam_rotation,
 ):
-    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze", "train_test_split.json")
+    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze", "train_test_split.json")
 
     with open(refer_list_file, "r") as f:
         datastore = json.load(f)
@@ -876,7 +912,7 @@ def evaluate_consistency(
     method,
 ):
 
-    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze", "train_test_split.json")
+    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze", "train_test_split.json")
 
     with open(refer_list_file, "r") as f:
         datastore = json.load(f)
@@ -1049,7 +1085,7 @@ def evaluate_gaze_transfer(
     img_dim,
     method,
 ):
-    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze", "train_test_split.json")
+    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze", "train_test_split.json")
 
     with open(refer_list_file, "r") as f:
         datastore = json.load(f)

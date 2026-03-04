@@ -88,16 +88,17 @@ def compute_relative_depth_loss(depth_eye, depth_face, eye_mask, margin=0.005):
     """
     计算相对深度惩罚损失 (Relative Depth Penalty)
     
-    目的: 惩罚超出眼睑范围的眼球点（即眼球凸出）。
-    在深度图中，距离相机越近，深度值通常越小。
-    因此，如果 depth_eye < depth_face，意味着眼球比皮肤更靠近镜头，产生了穿模。
-    
     参数:
-        depth_eye: [B, 1, H, W] 渲染的眼部深度图
-        depth_face: [B, 1, H, W] 渲染的面部深度图
-        eye_mask: [B, 1, H, W] 眼部区域的二值掩码 (1表示眼睛, 0表示其他)
-        margin: 容差，允许极其微小的凸起，防止过度惩罚导致眼球内陷凹陷。
+        depth_eye: [B, H, W] 或 [B, 1, H, W] 渲染的眼部深度图
+        depth_face: [B, H, W] 或 [B, 1, H, W] 渲染的面部深度图
+        eye_mask: [B, H, W] 或 [B, 1, H, W] 眼部区域的二值掩码
+        margin: 容差，防止过度惩罚
     """
+    # 统一维度：为了防止 mask 和 depth 的维度不同（一个是 3D 一个是 4D）导致广播计算错误，
+    # 我们强制把它们都展平成与 depth 一致的形状。
+    if depth_eye.dim() == 3 and eye_mask.dim() == 4:
+        eye_mask = eye_mask.squeeze(1)
+
     # 计算深度差，正值表示眼球比面部更靠近镜头（凸出）
     depth_diff = depth_face - depth_eye 
     
@@ -112,23 +113,26 @@ def compute_relative_depth_loss(depth_eye, depth_face, eye_mask, margin=0.005):
     
     return loss_depth
 
+
 def compute_normal_smoothness_loss(depth_map, mask):
     """
     计算局部法线平滑损失 (Local Normal Smoothness)
     
-    目的: 通过深度图的一阶空间梯度（近似法线或表面倾斜度）来约束局部的几何平滑，
-          防止不使用 2D 渲染器后出现的噪点和几何碎块。
-          
     参数:
-        depth_map: [B, 1, H, W] 渲染的深度图（面部或眼部均可）
-        mask: [B, 1, H, W] 关注的区域掩码
+        depth_map: [B, H, W] 或 [B, 1, H, W] 渲染的深度图
+        mask: [B, H, W] 或 [B, 1, H, W] 关注的区域掩码
     """
-    # 提取在 X 和 Y 方向的梯度 (相邻像素的深度差)
-    # 使用切片计算，比卷积更快
-    dy = depth_map[:, :, 1:, :] - depth_map[:, :, :-1, :]
-    dx = depth_map[:, :, :, 1:] - depth_map[:, :, :, :-1]
+    # 统一维度
+    if depth_map.dim() == 3 and mask.dim() == 4:
+        mask = mask.squeeze(1)
+
+    # 🚀 CVPR 级代码优化：使用 ... 自动适配 3D 或 4D 张量
+    # 无论前面有几个维度，都只对最后两个维度 (H, W) 进行错位减法
+    dy = depth_map[..., 1:, :] - depth_map[..., :-1, :]
+    dx = depth_map[..., :, 1:] - depth_map[..., :, :-1]
     
-    # 对齐尺寸 (由于切片导致尺寸少1，通过 padding 补齐)
+    # F.pad 默认从最后面的维度开始填充。
+    # (0, 0, 0, 1) 代表：最后1维(W)左右各填0，倒数第2维(H)上面填0下面填1
     dy = F.pad(dy, (0, 0, 0, 1)) 
     dx = F.pad(dx, (0, 1, 0, 0)) 
     
@@ -311,8 +315,8 @@ class GazeNeRFLoss(object):
         angular_loss_begin=2,
         device=None,
         use_depth_geom_loss=True,      # 开启你提出的深度几何约束
-        depth_penalty_weight=10.0,     # 相对深度惩罚的权重
-        normal_smoothness_weight=0.5,  # 平滑度先验的权重
+        depth_penalty_weight=0.001,     # 相对深度惩罚的权重
+        normal_smoothness_weight=0.0005,  # 平滑度先验的权重
     ) -> None:
         """
         Init function for GazeNeRFLoss.
@@ -425,12 +429,14 @@ class GazeNeRFLoss(object):
 
         bg_value = self.bg_value
 
-        res_img_face = data_dict["merge_img_face"]
-        res_img_face_pro = data_dict["merge_img_face_pro"]
-        res_img_eyes = data_dict["merge_img_eyes"]
-        res_img_eyes_pro = data_dict["merge_img_eyes_pro"]
-        res_img = data_dict["merge_img"]
-        res_img_pro = data_dict["merge_img_pro"]
+        res_img_face = data_dict['total_render_dict']["merge_img_face"]
+        res_img_face_pro = data_dict['total_render_dict']["merge_img_face_pro"]
+        res_img_eyes = data_dict['total_render_dict']["merge_img_eyes"]
+        res_img_eyes_pro = data_dict['total_render_dict']["merge_img_eyes_pro"]
+        res_img = data_dict['total_render_dict']["merge_img"]
+        res_img_pro = data_dict['total_render_dict']["merge_img_pro"]
+        depth_face = data_dict["face_render_dict"]["depth_maps"]
+        depth_eyes = data_dict["eyes_render_dict"]["depth_maps"]
 
         head_mask_c3b = head_mask_c1b.expand(-1, 3, -1, -1).float()
         face_mask_c3b = face_mask_c1b.expand(-1, 3, -1, -1).float()
@@ -500,6 +506,32 @@ class GazeNeRFLoss(object):
             "head_p": head_pro_loss + ssim_head_pro_loss + vgg_head_pro_loss,
             "psnr": psnr_head,
         }
+
+        # ==========================================
+        # 纯 3D 深度几何正则化
+        # ==========================================
+        if self.use_depth_geom_loss and depth_face is not None and depth_eyes is not None:
+            # 1. 计算相对深度惩罚 (防止眼球凸出)
+            # eyes_mask_c1b 是传进来的单通道眼部掩码
+            loss_relative_depth = compute_relative_depth_loss(
+                depth_eyes, 
+                depth_face, 
+                eyes_mask_c1b.float(), 
+                margin=0.5, #0.005 # 这个值需要你观察实际深度范围后微调
+            )
+            
+            # 2. 计算眼周局部法线平滑度
+            # 这里我们对融合后的面部深度图在眼眶附近进行平滑约束
+            # 可以扩展 mask 稍微涵盖眼眶周边
+            loss_smoothness = compute_normal_smoothness_loss(
+                depth_face, 
+                eyes_mask_c1b.float()
+            )
+            
+            # 将新的物理约束 Loss 加入字典，赋予较高权重以确保几何一致性
+            res["geom_relative_depth"] = loss_relative_depth * self.depth_penalty_weight
+            res["geom_smoothness"] = loss_smoothness * self.normal_smoothness_weight
+        # ==========================================
         res["eyes"] = res["eyes"] * self.eye_loss_importance
         res["eyes_p"] = res["eyes_p"] * self.eye_loss_importance
 
@@ -545,7 +577,7 @@ class GazeNeRFLoss(object):
         nonhead_mask = data['face_mask'] < 0.5
 
         loss_dict = self.calc_data_loss(
-            data['total_render_dict'],
+            data,
             data['image'],
             head_mask,
             face_mask,

@@ -76,7 +76,7 @@ def load_cams(opt):
     # 仅保留 ETH-XGaze 的相机加载逻辑（针对你的数据集）
     if "eth_xgaze" in opt.data_names:
         for cam_id in range(18):
-            cam_file_name = "/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze/cam/cam" + str(cam_id).zfill(2) + ".xml"
+            cam_file_name = "/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze/cam/cam" + str(cam_id).zfill(2) + ".xml"
             fs = cv2.FileStorage(cam_file_name, cv2.FILE_STORAGE_READ)
             cam_matrix["eth_xgaze"].append(fs.getNode("Camera_Matrix").mat())
             cam_distortion["eth_xgaze"].append(fs.getNode("Distortion_Coefficients").mat())
@@ -122,7 +122,7 @@ def main():
     model.eval()
     print("Gaze ResNet Evaluator Loaded.")
 
-    face_model_load = np.loadtxt("/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze/face_model.txt")
+    face_model_load = np.loadtxt("/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze/face_model.txt")
     cam_matrix, cam_distortion, cam_translation, cam_rotation = load_cams(opt)
     
     # --- 3. 执行评估 (将 args 替换为 opt) ---
