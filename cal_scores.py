@@ -4,7 +4,7 @@ import json
 import numpy as np
 
 # 1. 抓取目录下所有的 result_*.json 文件
-json_files = glob.glob("result_*.json")
+json_files = glob.glob("/home/kong/ylq/GazeGaussian/logs/baseline_test_20260304_132638/result_*.json")
 
 if not json_files:
     print("❌ 没有找到任何 result_*.json 文件，请确认你是否在正确的目录下运行此脚本！")

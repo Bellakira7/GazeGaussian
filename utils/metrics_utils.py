@@ -136,12 +136,22 @@ def select_cam_matrix(name,cam_matrix,cam_distortion,cam_ind, subject):
     else:
         print("Dataset not supported")
 
+def to_python_type(obj):
+    if torch.is_tensor(obj):
+        return obj.item() if obj.numel() == 1 else obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: to_python_type(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [to_python_type(v) for v in obj]
+    else:
+        return obj
+
 def evaluate_input_target_images(
     device, opt, model, cam_matrix, cam_distortion, face_model_load, img_dim, method
 ):
     val_keys = {}
     for name in opt.data_names:
-        file_path = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset", name, "train_test_split.json")
+        file_path = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset", name, "train_test_split.json")
         with open(file_path, "r") as f:
             import json
             datastore = json.load(f)
@@ -301,7 +311,38 @@ def evaluate_input_target_images(
 
             num_images += 1
             dict_num_images[name] += 1
-            
+            # 1. 确定保存目录
+            vis_out_dir = getattr(opt, 'out_dir', '.')
+            vis_dir = os.path.join(vis_out_dir, "visualizations")
+            os.makedirs(vis_dir, exist_ok=True)
+
+            # 2. 将 Tensor 转换为可保存的 Numpy 图像 (H, W, C)
+            def to_cv2_img(tensor):
+                img = tensor.detach().cpu().permute(1, 2, 0).numpy()
+                img = (np.clip(img, 0, 1) * 255).astype(np.uint8)
+                return cv2.cvtColor(img, cv2.COLOR_RGB2BGR) # 转为 BGR 供 OpenCV 保存
+
+            vis_src = to_cv2_img(batch_images_1[0])       # 输入的身份/Source
+            vis_gt  = to_cv2_img(target_image_quality[0]) # 目标真值/Target GT
+            vis_pred = to_cv2_img(pred_image_quality[0])  # 模型生成图/Prediction
+
+            # 3. 如果尺寸不一致，强制对齐（防止 hstack 报错）
+            if vis_src.shape != vis_gt.shape:
+                vis_src = cv2.resize(vis_src, (vis_gt.shape[1], vis_gt.shape[0]))
+
+            # 4. 横向拼接：[Source] | [Target GT] | [Prediction]
+            combined_img = np.hstack((vis_src, vis_gt, vis_pred))
+
+            # 5. 在图上绘制当前的误差信息（可选）
+            cv2.putText(combined_img, f"Gaze Err: {loss:.2f}", (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+            # 6. 保存图片
+            # 文件名：Subject_SourceID_to_TargetID.jpg
+            vis_name = f"{subject}_{key_1}_to_{key_2}.jpg"
+            if i % 5 == 0:
+                cv2.imwrite(os.path.join(vis_dir, vis_name), combined_img)
+
             # 注意：原来的 print 被移除了，因为我们要等所有指标算完一起打印
 
             # 身份保持度 (Face Similarity)
@@ -406,6 +447,7 @@ def evaluate_input_target_images(
         
         # 存到专属文件夹下
         file_path = os.path.join(out_dir, f"result_{opt.subject}.json")
+        res = to_python_type(res)
         with open(file_path, "w") as f:
             json.dump(res, f, indent=4)
 # def evaluate_input_target_images(
@@ -693,7 +735,7 @@ def evaluate_personal_calibration(
     cam_translation,
     cam_rotation,
 ):
-    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze", "train_test_split.json")
+    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze", "train_test_split.json")
 
     with open(refer_list_file, "r") as f:
         datastore = json.load(f)
@@ -876,7 +918,7 @@ def evaluate_consistency(
     method,
 ):
 
-    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze", "train_test_split.json")
+    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze", "train_test_split.json")
 
     with open(refer_list_file, "r") as f:
         datastore = json.load(f)
@@ -1049,7 +1091,7 @@ def evaluate_gaze_transfer(
     img_dim,
     method,
 ):
-    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian-main/configs/dataset/eth_xgaze", "train_test_split.json")
+    refer_list_file = os.path.join("/home/kong/ylq/GazeGaussian/configs/dataset/eth_xgaze", "train_test_split.json")
 
     with open(refer_list_file, "r") as f:
         datastore = json.load(f)
